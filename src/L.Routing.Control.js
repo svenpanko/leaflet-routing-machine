@@ -28,13 +28,16 @@
 			if (options.routeWhileDragging) {
 				(function() {
 					var restore;
-					this._plan.on('waypointdrag', L.Util.limitExecByInterval(function(e) {
+					this._plan.on('waypointdragstart', function() {
 						restore = this.options.fitSelectedRoutes;
 						this.options.fitSelectedRoutes = false;
+					}, this);
+					this._plan.on('waypointdrag', L.Util.limitExecByInterval(function(e) {
 						this.route({waypoints: e.waypoints, geometryOnly: true});
 					}, this.options.routeDragInterval, this));
 					this._plan.on('waypointdragend', function() {
 						this.options.fitSelectedRoutes = restore;
+						this.route();
 					}, this);
 				}).call(this);
 			}
@@ -106,6 +109,7 @@
 			var ts = new Date().getTime(),
 				wps;
 
+			options = options || {};
 			this._lastRequestTimestamp = ts;
 
 			if (this._plan.isReady()) {
@@ -123,8 +127,13 @@
 							this.fire('routingerror', {error: err});
 							return;
 						}
-						this.fire('routesfound', {waypoints: wps, routes: routes});
-						this.setAlternatives(routes);
+
+						if (!options.geometryOnly) {
+							this.fire('routesfound', {waypoints: wps, routes: routes});
+							this.setAlternatives(routes);
+						} else {
+							this._routeSelected({route: routes[0]});
+						}
 					}
 				}, this, options);
 			}

@@ -6,7 +6,8 @@
 			fitSelectedRoutes: true,
 			routeLine: function(route, options) { return L.Routing.line(route, options); },
 			autoRoute: true,
-			routeWhileDragging: false
+			routeWhileDragging: false,
+			routeDragInterval: 500
 		},
 
 		initialize: function(options) {
@@ -24,11 +25,10 @@
 				}
 				this.fire('waypointschanged', {waypoints: e.waypoints});
 			}, this);
-			if (options.routeWhileDragging)
-			{
-				this._plan.on('waypointdrag', function(e) {
-						this.route({waypoints: e.waypoints, geometryOnly: true});
-				}, this);
+			if (options.routeWhileDragging) {
+				this._plan.on('waypointdrag', L.Util.limitExecByInterval(function(e) {
+					this.route({waypoints: e.waypoints, geometryOnly: true});
+				}, this.options.routeDragInterval, this));
 			}
 
 			if (this.options.autoRoute) {

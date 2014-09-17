@@ -26,9 +26,17 @@
 				this.fire('waypointschanged', {waypoints: e.waypoints});
 			}, this);
 			if (options.routeWhileDragging) {
-				this._plan.on('waypointdrag', L.Util.limitExecByInterval(function(e) {
-					this.route({waypoints: e.waypoints, geometryOnly: true});
-				}, this.options.routeDragInterval, this));
+				(function() {
+					var restore;
+					this._plan.on('waypointdrag', L.Util.limitExecByInterval(function(e) {
+						restore = this.options.fitSelectedRoutes;
+						this.options.fitSelectedRoutes = false;
+						this.route({waypoints: e.waypoints, geometryOnly: true});
+					}, this.options.routeDragInterval, this));
+					this._plan.on('waypointdragend', function() {
+						this.options.fitSelectedRoutes = restore;
+					}, this);
+				}).call(this);
 			}
 
 			if (this.options.autoRoute) {

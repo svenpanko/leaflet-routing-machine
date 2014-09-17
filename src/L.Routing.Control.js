@@ -40,7 +40,7 @@
 			}
 
 			if (this.options.autoRoute) {
-				this.route({});
+				this.route();
 			}
 		},
 
@@ -109,9 +109,9 @@
 			this._lastRequestTimestamp = ts;
 
 			if (this._plan.isReady()) {
-				wps = options.waypoints || this._plan.getWaypoints();
+				wps = options && options.waypoints || this._plan.getWaypoints();
 				this.fire('routingstart', {waypoints: wps});
-				this._router.route(wps, options, function(err, routes) {
+				this._router.route(wps, function(err, routes) {
 					// Prevent race among multiple requests,
 					// by checking the current request's timestamp
 					// against the last request's; ignore result if
@@ -126,7 +126,7 @@
 						this.fire('routesfound', {waypoints: wps, routes: routes});
 						this.setAlternatives(routes);
 					}
-				}, this);
+				}, this, options);
 			}
 		},
 

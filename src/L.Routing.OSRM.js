@@ -33,7 +33,7 @@
 			};
 		},
 
-		route: function(waypoints, options, callback, context) {
+		route: function(waypoints, callback, context, options) {
 			var url = this._buildRouteUrl(waypoints, options),
 				timedOut = false,
 				timer = setTimeout(function() {
@@ -91,8 +91,8 @@
 
 		_buildRouteUrl: function(waypoints, options) {
 			var locs = [],
-			    computeInstructions = true,
-			    computeAlternative = true,
+			    computeInstructions,
+			    computeAlternative,
 			    locationKey,
 			    hint;
 
@@ -106,11 +106,8 @@
 				}
 			}
 
-			if (options.geometryOnly)
-			{
-				computeAlternative = false;
-				computeInstructions = false;
-			}
+			computeAlternative = computeInstructions =
+				!(options && options.geometryOnly);
 
 			return this.options.serviceUrl + '?' +
 				'instructions=' + computeInstructions + '&' +

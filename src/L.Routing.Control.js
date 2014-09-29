@@ -8,11 +8,8 @@
 			autoRoute: true,
 			routeWhileDragging: false,
 			routeDragInterval: 500,
-			waypointMode: 'connect'
-		},
-
-		// used to temporary overide options, e.g. fitSelectedRoutes while dragging
-		_optionsOverride : {
+			waypointMode: 'connect',
+			useZoomParameter: false
 		},
 
 		initialize: function(options) {
@@ -39,10 +36,14 @@
 
 			this._map = map;
 			this._map.addLayer(this._plan);
-			this._map.on('zoomend', function() {
-				this._optionsOverride.fitSelectedRoutes = false;
-				this.route();
-			}, this);
+
+			if (this.options.useZoomParameter) {
+				this._map.on('zoomend', function() {
+					this.route({
+						callback: L.bind(this._updateLineCallback, this)
+					});
+				}, this);
+			}
 
 			if (this._plan.options.geocoder) {
 				container.insertBefore(this._plan.createGeocoders(), container.firstChild);
@@ -77,41 +78,30 @@
 			return this._plan;
 		},
 
-		_override: function(defaultValue, overrideValue) {
-			if (typeof(overrideValue) !== 'undefined')
-			{
-				return overrideValue;
-			}
-			return defaultValue;
-		},
-
 		_routeSelected: function(e) {
-			var route = e.route,
-			    fitSelectedRoutes = this._override(this.options.fitSelectedRoutes,
-			                                       this._optionsOverride.fitSelectedRoutes),
-			    waypointMode = this._override(this.options.waypointMode,
-			                                  this._optionsOverride.waypointMode);
+			var route = e.route;
 
-			this._clearLine();
+			this._updateLine(route);
 
-			this._line = this.options.routeLine(route,
-				L.extend({extendToWaypoints: waypointMode === 'connect'},
-					this.options.lineOptions));
-			this._line.addTo(this._map);
-			this._hookEvents(this._line);
-
-			if (fitSelectedRoutes) {
+			if (this.options.fitSelectedRoutes) {
 				this._map.fitBounds(this._line.getBounds());
 			}
 
-			if (waypointMode === 'snap') {
+			if (this.options.waypointMode === 'snap') {
 				this._plan.off('waypointschanged', this._onWaypointsChanged, this);
 				this.setWaypoints(route.waypoints);
 				this._plan.on('waypointschanged', this._onWaypointsChanged, this);
 			}
+		},
 
-			this._optionsOverride.fitSelectedRoutes = undefined;
-			this._optionsOverride.waypointMode = undefined;
+		_updateLine: function(route) {
+			this._clearLine();
+
+			this._line = this.options.routeLine(route,
+				L.extend({extendToWaypoints: this.options.waypointMode === 'connect'},
+					this.options.lineOptions));
+			this._line.addTo(this._map);
+			this._hookEvents(this._line);
 		},
 
 		_hookEvents: function(l) {
@@ -133,17 +123,23 @@
 			this._plan.on('waypointdrag', L.bind(function(e) {
 				var now = new Date().getTime();
 				if (now - lastCalled >= this.options.routeDragInterval) {
-					this._optionsOverride.fitSelectedRoutes = false;
-					this._optionsOverride.waypointMode = 'connect';
-					this.route({waypoints: e.waypoints, geometryOnly: true});
+					this.route({
+						waypoints: e.waypoints,
+						geometryOnly: true,
+						callback: L.bind(this._updateLineCallback, this)
+					});
 					lastCalled = now;
 				}
 			}, this));
 			this._plan.on('waypointdragend', function() {
-				this._optionsOverride.fitSelectedRoutes = undefined;
-				this._optionsOverride.waypointMode = undefined;
 				this.route();
 			}, this);
+		},
+
+		_updateLineCallback: function(err, routes) {
+			if (!err) {
+				this._updateLine(routes[0]);
+			}
 		},
 
 		route: function(options) {
@@ -154,10 +150,13 @@
 			this._lastRequestTimestamp = ts;
 
 			if (this._plan.isReady()) {
-				options.z = this._map.getZoom();
+				if (this.options.useZoomParameter) {
+					options.z = this._map && this._map.getZoom();
+				}
+
 				wps = options && options.waypoints || this._plan.getWaypoints();
 				this.fire('routingstart', {waypoints: wps});
-				this._router.route(wps, function(err, routes) {
+				this._router.route(wps, options.callback || function(err, routes) {
 					// Prevent race among multiple requests,
 					// by checking the current request's timestamp
 					// against the last request's; ignore result if

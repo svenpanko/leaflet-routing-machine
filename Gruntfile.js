@@ -19,10 +19,15 @@ module.exports = function(grunt) {
 				src: 'dist/leaflet-routing-machine.js',
 				dest: 'dist/leaflet-routing-machine.min.js'
 			}
+		},
+		release: {
+			email: 'per@liedman.net',
+			name: 'Per Liedman'
 		}
 	});
 
 	grunt.loadNpmTasks('grunt-browserify');
 	grunt.loadNpmTasks('grunt-contrib-uglify');
+	grunt.loadNpmTasks('grunt-semantic-release');
 	grunt.registerTask('default', ['browserify', 'uglify']);
 };

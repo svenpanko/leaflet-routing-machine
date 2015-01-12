@@ -16,7 +16,7 @@
 		}
 	}
 
-	L.Routing.Plan = L.Class.extend({
+	L.Routing.Plan = L.Layer.extend({
 		includes: L.Mixin.Events,
 
 		options: {

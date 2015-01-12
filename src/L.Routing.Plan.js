@@ -374,6 +374,12 @@
 			} else {
 				this._dragNewWaypoint(newWpIndex, e.latlng);
 			}
+
+			this._markers.splice(e.afterIndex + 1, 0, this._newWp.marker);
+			this._map.on('mousemove', this._onDragNewWp, this);
+			this._map.on('mouseup', this._onWpRelease, this);
+
+			this._map.dragging.disable();
 		},
 
 		_dragNewWaypoint: function(newWpIndex, initialLatLng) {
@@ -416,6 +422,10 @@
 
 			this._map.on('mousemove', mouseMove);
 			this._map.on('mouseup', mouseUp);
+
+			this.spliceWaypoints(this._newWp.afterIndex + 1, 0, e.latlng);
+			delete this._newWp;
+			this._map.dragging.enable();
 		},
 
 		_focusGeocoder: function(i) {

@@ -179,6 +179,19 @@
     line-height: 1;
 }
 
+.leaflet-routing-geocoder .leaflet-routing-spinning .leaflet-routing-remove-waypoint:after {
+    content: none;
+}
+
+.leaflet-routing-geocoder .leaflet-routing-spinner {
+    display: none;
+}
+
+.leaflet-routing-geocoder .leaflet-routing-spinner .leaflet-routing-spinning {
+    display: block;
+    background: url(throbber.gif);
+}
+
 .leaflet-routing-remove-waypoint:hover {
     color: black;
 }

@@ -207,13 +207,32 @@
 					this._fireChanged();
 					this._focusGeocoder(i + 1);
 				}, this, L.extend({
-					resultFn: this.options.geocoder.geocode,
-					resultContext: this.options.geocoder,
-					autocompleteFn: this.options.geocoder.suggest,
-					autocompleteContext: this.options.geocoder
+					resultFn: this._getGeocodeCallback(g.spinner, 'geocode'),
+					autocompleteFn: this._getGeocodeCallback(g.spinner, 'suggest'),
 				}, this.options.autocompleteOptions));
 
 			return g;
+		},
+
+		_getGeocodeCallback: function(spinnerEl, geocodeMethod) {
+			var geocoder = this.options.geocoder;
+
+			if (this.options.geocoder && this.options.geocoder[geocodeMethod]) {
+				return function(q, cb, context) {
+					if (spinnerEl) {
+						L.DomUtil.addClass(spinnerEl, 'leaflet-routing-spinner');
+					}
+
+					geocoder[geocodeMethod](q, function(responses) {
+						if (spinnerEl) {
+							//L.DomUtil.removeClass(spinnerEl, 'leaflet-routing-spinner');
+						}
+						cb.call(context, responses);
+					});
+				};
+			} else {
+				return undefined;
+			}
 		},
 
 		_updateGeocoders: function(e) {

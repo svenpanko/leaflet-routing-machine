@@ -339,7 +339,7 @@
 	});
 
 	L.Routing.osrmv1 = function(options) {
-		return new L.Routing.OSRM(options);
+		return new L.Routing.OSRMv1(options);
 	};
 
 	module.exports = L.Routing;

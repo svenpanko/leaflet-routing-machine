@@ -20,7 +20,10 @@
 			routeDragInterval: 500,
 			waypointMode: 'connect',
 			useZoomParameter: false,
-			showAlternatives: false
+			showAlternatives: false,
+			defaultErrorHandler: function(e) {
+				console.error('Routing error:', e.error);
+			}
 		},
 
 		initialize: function(options) {
@@ -33,6 +36,9 @@
 			L.Routing.Itinerary.prototype.initialize.call(this, options);
 
 			this.on('routeselected', this._routeSelected, this);
+			if (this.options.defaultErrorHandler) {
+				this.on('routingerror', this.options.defaultErrorHandler);
+			}
 			this._plan.on('waypointschanged', this._onWaypointsChanged, this);
 			if (options.routeWhileDragging) {
 				this._setupRouteDragging();

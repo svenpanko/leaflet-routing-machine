@@ -228,8 +228,14 @@ if (typeof module !== undefined) module.exports = polyline;
 		_open: function() {
 			var rect = this._elem.getBoundingClientRect();
 			if (!this._container.parentElement) {
-				this._container.style.left = (rect.left + window.scrollX) + 'px';
-				this._container.style.top = (rect.bottom + window.scrollY) + 'px';
+				// See notes section under https://developer.mozilla.org/en-US/docs/Web/API/Window/scrollX
+				// This abomination is required to support all flavors of IE
+				var scrollX = (window.pageXOffset !== undefined) ? window.pageXOffset
+					: (document.documentElement || document.body.parentNode || document.body).scrollLeft;
+				var scrollY = (window.pageYOffset !== undefined) ? window.pageYOffset
+					: (document.documentElement || document.body.parentNode || document.body).scrollTop;
+				this._container.style.left = (rect.left + scrollX) + 'px';
+				this._container.style.top = (rect.bottom + scrollY) + 'px';
 				this._container.style.width = (rect.right - rect.left) + 'px';
 				document.body.appendChild(this._container);
 			}
@@ -414,7 +420,10 @@ if (typeof module !== undefined) module.exports = polyline;
 			routeDragInterval: 500,
 			waypointMode: 'connect',
 			useZoomParameter: false,
-			showAlternatives: false
+			showAlternatives: false,
+			defaultErrorHandler: function(e) {
+				console.error('Routing error:', e.error);
+			}
 		},
 
 		initialize: function(options) {
@@ -427,6 +436,9 @@ if (typeof module !== undefined) module.exports = polyline;
 			L.Routing.Itinerary.prototype.initialize.call(this, options);
 
 			this.on('routeselected', this._routeSelected, this);
+			if (this.options.defaultErrorHandler) {
+				this.on('routingerror', this.options.defaultErrorHandler);
+			}
 			this._plan.on('waypointschanged', this._onWaypointsChanged, this);
 			if (options.routeWhileDragging) {
 				this._setupRouteDragging();
@@ -847,6 +859,9 @@ if (typeof module !== undefined) module.exports = polyline;
 		},
 
 		formatTime: function(t /* Number (seconds) */) {
+			// More than 30 seconds precision looks ridiculous
+			t = Math.round(t / 30) * 30;
+
 			if (t > 86400) {
 				return Math.round(t / 3600) + ' h';
 			} else if (t > 3600) {
@@ -2495,7 +2510,8 @@ if (typeof module !== undefined) module.exports = polyline;
 							road: step.name,
 							direction: this._bearingToDirection(step.maneuver.bearing_after),
 							exit: step.maneuver.exit,
-							index: index
+							index: index,
+							mode: step.mode
 						});
 					}
 
@@ -2577,22 +2593,6 @@ if (typeof module !== undefined) module.exports = polyline;
 			return wps;
 		},
 
-		_createName: function(nameParts) {
-			var name = '',
-				i;
-
-			for (i = 0; i < nameParts.length; i++) {
-				if (nameParts[i]) {
-					if (name) {
-						name += ', ';
-					}
-					name += nameParts[i].charAt(0).toUpperCase() + nameParts[i].slice(1);
-				}
-			}
-
-			return name;
-		},
-
 		buildRouteUrl: function(waypoints, options) {
 			var locs = [],
 				hints = [],
@@ -2633,40 +2633,6 @@ if (typeof module !== undefined) module.exports = polyline;
 				loc = waypoints[i].latLng;
 				this._hints.locations[this._locationKey(loc)] = actualWaypoints[i].hint;
 			}
-		},
-
-		_convertSummary: function(osrmSummary) {
-			return {
-				totalDistance: osrmSummary.total_distance,
-				totalTime: osrmSummary.total_time
-			};
-		},
-
-		_convertInstructions: function(osrmInstructions) {
-			var result = [],
-			    i,
-			    instr,
-			    type,
-			    driveDir;
-
-			for (i = 0; i < osrmInstructions.length; i++) {
-				instr = osrmInstructions[i];
-				type = this._drivingDirectionType(instr[0]);
-				driveDir = instr[0].split('-');
-				if (type) {
-					result.push({
-						type: type,
-						distance: instr[2],
-						time: instr[4],
-						road: instr[1],
-						direction: instr[6],
-						exit: driveDir.length > 1 ? driveDir[1] : undefined,
-						index: instr[3]
-					});
-				}
-			}
-
-			return result;
 		},
 	});
 

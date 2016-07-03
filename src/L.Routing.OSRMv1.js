@@ -18,7 +18,7 @@
 	 */
 	L.Routing.OSRMv1 = L.Class.extend({
 		options: {
-			serviceUrl: 'http://router.project-osrm.org/route/v1',
+			serviceUrl: 'https://router.project-osrm.org/route/v1',
 			profile: 'driving',
 			timeout: 30 * 1000,
 			routingOptions: {
@@ -43,7 +43,8 @@
 				wp,
 				i;
 
-			url = this.buildRouteUrl(waypoints, L.extend({}, this.options.routingOptions, options));
+			options = L.extend({}, this.options.routingOptions, options);
+			url = this.buildRouteUrl(waypoints, options);
 
 			timer = setTimeout(function() {
 				timedOut = true;
@@ -96,6 +97,22 @@
 			return this;
 		},
 
+		requiresMoreDetail: function(route, zoom, bounds) {
+			if (!route.properties.isSimplified) {
+				return false;
+			}
+
+			var waypoints = route.inputWaypoints,
+				i;
+			for (i = 0; i < waypoints.length; ++i) {
+				if (!bounds.contains(waypoints[i].latLng)) {
+					return true;
+				}
+			}
+
+			return false;
+		},
+
 		_routeDone: function(response, inputWaypoints, options, callback, context) {
 			var alts = [],
 			    actualWaypoints,
@@ -113,9 +130,10 @@
 			actualWaypoints = this._toWaypoints(inputWaypoints, response.waypoints);
 
 			for (i = 0; i < response.routes.length; i++) {
-				route = this._convertRoute(response.routes[i], options.geometryOnly);
+				route = this._convertRoute(response.routes[i]);
 				route.inputWaypoints = inputWaypoints;
 				route.waypoints = actualWaypoints;
+				route.properties = {isSimplified: !options || !options.geometryOnly || options.simplifyGeometry};
 				alts.push(route);
 			}
 
@@ -124,18 +142,20 @@
 			callback.call(context, null, alts);
 		},
 
-		_convertRoute: function(responseRoute, geometryOnly) {
+		_convertRoute: function(responseRoute) {
 			var result = {
-					name: '', // TODO
+					name: '',
+					coordinates: [],
+					instructions: [],
 					summary: {
 						totalDistance: responseRoute.distance,
 						totalTime: responseRoute.duration
 					}
 				},
-				coordinates = [],
-				instructions = [],
+				legNames = [],
 				index = 0,
 				legCount = responseRoute.legs.length,
+				hasSteps = responseRoute.legs[0].steps.length > 0,
 				i,
 				j,
 				leg,
@@ -143,20 +163,16 @@
 				geometry,
 				type;
 
-			if (geometryOnly) {
-				result.coordinates = this._decodePolyline(responseRoute.geometry);
-				return result;
-			}
-
 			for (i = 0; i < legCount; i++) {
 				leg = responseRoute.legs[i];
+				legNames.push(leg.summary);
 				for (j = 0; j < leg.steps.length; j++) {
 					step = leg.steps[j];
 					geometry = this._decodePolyline(step.geometry);
-					coordinates.push(geometry);
+					result.coordinates.push.apply(result.coordinates, geometry);
 					type = this._maneuverToInstructionType(step.maneuver, i === legCount - 1);
 					if (type) {
-						instructions.push({
+						result.instructions.push({
 							type: type,
 							distance: step.distance,
 							time: step.duration,
@@ -172,8 +188,10 @@
 				}
 			}
 
-			result.coordinates = Array.prototype.concat.apply([], coordinates);
-			result.instructions = instructions;
+			result.name = legNames.join(', ');
+			if (!hasSteps) {
+				result.coordinates = this._decodePolyline(responseRoute.geometry);
+			}
 
 			return result;
 		},
@@ -185,8 +203,22 @@
 
 		_maneuverToInstructionType: function(maneuver, lastLeg) {
 			switch (maneuver.type) {
-			case 'turn':
-			case 'end of road':
+			case 'new name':
+				return 'Continue';
+			case 'arrive':
+				return lastLeg ? 'DestinationReached' : 'WaypointReached';
+			case 'roundabout':
+			case 'rotary':
+				return 'Roundabout';
+			// These are all reduced to the same instruction in the current model
+			//case 'turn':
+			//case 'end of road':
+			//case 'merge':
+			//case 'on ramp': // new in v5.1
+			//case 'off ramp': // new in v5.1
+			//case 'ramp': // deprecated in v5.1
+			//case 'fork':
+			default:
 				switch (maneuver.modifier) {
 				case 'straight':
 					return 'Straight';
@@ -207,18 +239,6 @@
 				default:
 					return null;
 				}
-				break;
-			case 'new name':
-			case 'merge':
-			case 'ramp':
-			case 'fork':
-				return 'Continue';
-			case 'arrive':
-				return lastLeg ? 'DestinationReached' : 'WaypointReached';
-			case 'roundabout':
-			case 'rotary':
-				return 'Roundabout';
-			default:
 				return null;
 			}
 		},
@@ -238,9 +258,9 @@
 			var wps = [],
 			    i;
 			for (i = 0; i < vias.length; i++) {
-				wps.push(L.Routing.waypoint(L.latLng(vias[i]),
+				wps.push(L.Routing.waypoint(L.latLng(vias[i].location),
 				                            inputWaypoints[i].name,
-				                            inputWaypoints[i].options));
+											inputWaypoints[i].options));
 			}
 
 			return wps;
@@ -252,24 +272,24 @@
 				wp,
 				latLng,
 			    computeInstructions,
-			    computeAlternative;
+			    computeAlternative = true;
 
 			for (var i = 0; i < waypoints.length; i++) {
 				wp = waypoints[i];
 				latLng = wp.latLng;
 				locs.push(latLng.lng + ',' + latLng.lat);
-				hints.push(this._hints[this._locationKey(latLng)] || '');
+				hints.push(this._hints.locations[this._locationKey(latLng)] || '');
 			}
 
-			computeAlternative = computeInstructions =
+			computeInstructions =
 				!(options && options.geometryOnly);
 
 			return this.options.serviceUrl + '/' + this.options.profile + '/' +
 				locs.join(';') + '?' +
-				(options.z ? 'z=' + options.z + '&' : (options.geometryOnly ? 'overview=full&' : '')) +
-				//'hints=' + hints.join(';') + '&' +
-				'alternatives=' + computeAlternative.toString() + '&' +
-				'steps=' + computeInstructions.toString() +
+				(options.geometryOnly ? (options.simplifyGeometry ? '' : 'overview=full') : 'overview=false') +
+				'&alternatives=' + computeAlternative.toString() +
+				'&steps=' + computeInstructions.toString() +
+				'&hints=' + hints.join(';') +
 				(options.allowUTurns ? '&continue_straight=' + !options.allowUTurns : '');
 		},
 

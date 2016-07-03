@@ -19,7 +19,6 @@
 			routeWhileDragging: false,
 			routeDragInterval: 500,
 			waypointMode: 'connect',
-			useZoomParameter: false,
 			showAlternatives: false,
 			defaultErrorHandler: function(e) {
 				console.error('Routing error:', e.error);
@@ -55,13 +54,31 @@
 			this._map = map;
 			this._map.addLayer(this._plan);
 
-			if (this.options.useZoomParameter) {
-				this._map.on('zoomend', function() {
+			this._map.on('zoomend', function() {
+				if (!this._selectedRoute ||
+					!this._router.requiresMoreDetail) {
+					return;
+				}
+
+				var map = this._map;
+				if (this._router.requiresMoreDetail(this._selectedRoute,
+						map.getZoom(), map.getBounds())) {
 					this.route({
-						callback: L.bind(this._updateLineCallback, this)
+						callback: L.bind(function(err, routes) {
+							var i;
+							if (!err) {
+								for (i = 0; i < routes.length; i++) {
+									this._routes[i].properties = routes[i].properties;
+								}
+								this._updateLineCallback(err, routes);
+							}
+
+						}, this),
+						simplifyGeometry: false,
+						geometryOnly: true
 					});
-				}, this);
-			}
+				}
+			}, this);
 
 			if (this._plan.options.geocoder) {
 				container.insertBefore(this._plan.createGeocoders(), container.firstChild);
@@ -101,7 +118,7 @@
 		},
 
 		_routeSelected: function(e) {
-			var route = e.route,
+			var route = this._selectedRoute = e.route,
 				alternatives = this.options.showAlternatives && e.alternatives,
 				fitMode = this.options.fitSelectedRoutes,
 				fitBounds =
